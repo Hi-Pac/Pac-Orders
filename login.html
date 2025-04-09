@@ -45,7 +45,7 @@
       const password = document.getElementById("password").value;
       try {
         await signInWithEmailAndPassword(auth, email, password);
-        window.location.href = "dashboard.html";
+        window.location.href = "index.html";
       } catch (error) {
         document.getElementById("error").innerText = "خطأ في تسجيل الدخول، تحقق من البيانات.";
       }
