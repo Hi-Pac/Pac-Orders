@@ -1,193 +1,0 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <title>لوحة التحكم - نظام إدارة الطلبات</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
-  <style>
-    .pointer { cursor: pointer; }
-  </style>
-</head>
-<body class="bg-light">
-  <div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h3>نظام إدارة طلبات العبوات البلاستيكية</h3>
-      <div>
-        <span class="me-3 fw-bold text-primary" id="userEmail"></span>
-        <button id="logoutBtn" class="btn btn-danger">🚪 تسجيل الخروج</button>
-      </div>
-    </div>
-
-    <!-- Toast -->
-    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-      <div id="actionToast" class="toast" role="alert">
-        <div class="toast-body bg-success text-white"></div>
-      </div>
-    </div>
-
-    <!-- Orders Card -->
-    <div class="card mb-3">
-      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        جدول الطلبات
-        <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#orderModal">➕ طلب جديد</button>
-      </div>
-      <div class="card-body p-0">
-        <table class="table table-bordered mb-0">
-          <thead class="table-light">
-            <tr>
-              <th>🛠️</th>
-              <th>الحالة</th>
-              <th>الأيام المتبقية</th>
-              <th>تاريخ التسليم</th>
-              <th>الكمية</th>
-              <th>اسم العميل</th>
-              <th>رقم الطلب</th>
-            </tr>
-          </thead>
-          <tbody id="ordersTableBody">
-            <tr><td colspan="7" class="text-center p-3">جاري تحميل الطلبات...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- Order Modal -->
-  <div class="modal fade" id="orderModal" tabindex="-1">
-    <div class="modal-dialog">
-      <form id="orderForm" class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">إضافة طلب جديد</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <input type="text" class="form-control mb-2" placeholder="اسم العميل" name="clientName" required>
-          <input type="number" class="form-control mb-2" placeholder="الكمية" name="quantity" required>
-          <input type="date" class="form-control mb-2" name="deliveryDate" required>
-        </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-success">إضافة</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyD8loT0jeGJFUxPsLzbD-ItHU2UbBxCCSU",
-      authDomain: "plastic-app-3d2af.firebaseapp.com",
-      projectId: "plastic-app-3d2af",
-      storageBucket: "plastic-app-3d2af.firebasestorage.app",
-      messagingSenderId: "847266877084",
-      appId: "1:847266877084:web:7b1881d1d8c6744bd82759",
-      measurementId: "G-0108S3D9ML"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
-
-    const ordersTable = document.getElementById("ordersTableBody");
-    const toast = document.getElementById("actionToast");
-    const toastBody = toast.querySelector(".toast-body");
-
-    function showToast(message) {
-      toastBody.innerText = message;
-      new bootstrap.Toast(toast).show();
-    }
-
-    function daysRemaining(dateStr) {
-      const today = new Date();
-      const delivery = new Date(dateStr);
-      const diffTime = delivery - today;
-      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    }
-
-    function renderOrders(orders) {
-      ordersTable.innerHTML = "";
-      orders.forEach(order => {
-        const row = document.createElement("tr");
-        const remaining = order.deliveryDate ? daysRemaining(order.deliveryDate) : '--';
-        row.innerHTML = `
-          <td>
-            <button class="btn btn-danger btn-sm me-1" onclick="deleteOrder('${order.id}')">🗑️</button>
-          </td>
-          <td>
-            <select class="form-select form-select-sm" onchange="updateOrder('${order.id}', 'status', this.value)">
-              <option ${order.status === 'قيد الانتظار' ? 'selected' : ''}>قيد الانتظار</option>
-              <option ${order.status === 'مكتمل' ? 'selected' : ''}>مكتمل</option>
-            </select>
-          </td>
-          <td>${remaining}</td>
-          <td><input type="date" class="form-control form-control-sm" value="${order.deliveryDate || ''}" onchange="updateOrder('${order.id}', 'deliveryDate', this.value)"></td>
-          <td>${order.quantity}</td>
-          <td>${order.clientName}</td>
-          <td>${order.id}</td>
-        `;
-        ordersTable.appendChild(row);
-      });
-    }
-
-    async function loadOrders() {
-      const snapshot = await getDocs(collection(db, "orders"));
-      const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      renderOrders(orders);
-    }
-
-    async function deleteOrder(id) {
-      if (confirm("هل أنت متأكد من حذف هذا الطلب؟")) {
-        await deleteDoc(doc(db, "orders", id));
-        loadOrders();
-        showToast("تم حذف الطلب بنجاح ✔️");
-      }
-    }
-
-    async function updateOrder(id, field, value) {
-      await updateDoc(doc(db, "orders", id), { [field]: value });
-      loadOrders();
-      showToast("تم التحديث بنجاح 🔄");
-    }
-
-    async function addOrder(e) {
-      e.preventDefault();
-      const form = e.target;
-      const newOrder = {
-        clientName: form.clientName.value,
-        quantity: Number(form.quantity.value),
-        deliveryDate: form.deliveryDate.value,
-        status: 'قيد الانتظار'
-      };
-      await addDoc(collection(db, "orders"), newOrder);
-      form.reset();
-      bootstrap.Modal.getInstance(document.getElementById('orderModal')).hide();
-      loadOrders();
-      showToast("تمت إضافة الطلب ✔️");
-    }
-
-    window.deleteOrder = deleteOrder;
-    window.updateOrder = updateOrder;
-
-    document.getElementById("orderForm").addEventListener("submit", addOrder);
-
-    window.onload = () => {
-      onAuthStateChanged(auth, user => {
-        if (user) {
-          document.getElementById("userEmail").innerText = user.email;
-          loadOrders();
-        } else {
-          window.location.href = "login.html";
-        }
-      });
-
-      document.getElementById("logoutBtn").onclick = () => {
-        signOut(auth).then(() => window.location.href = "login.html");
-      };
-    };
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
